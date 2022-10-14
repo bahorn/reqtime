@@ -1,4 +1,5 @@
 import time
+import os
 import pandas as pd
 
 from target import target
@@ -13,13 +14,13 @@ def padding(base, length=32, padchar='f'):
 
 
 def time_function(func):
-    start = time.time()
+    start = time.monotonic_ns()
     func()
-    end = time.time()
+    end = time.monotonic_ns()
     return end - start
 
 
-def compare_cases(c1, c2, count=2**12):
+def compare_cases(c1, c2, count=2**14):
     t1 = padding(c1)
     t2 = padding(c2)
 
@@ -36,6 +37,10 @@ def compare_cases(c1, c2, count=2**12):
 
 
 def base():
+    cpu_mask = [0 for i in range(os.cpu_count())]
+    cpu_mask[0] = 1
+    os.sched_setaffinity(0, cpu_mask)
+
     base_str = ''
     while len(base_str) < 32:
         curr = []
