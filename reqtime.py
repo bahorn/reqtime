@@ -9,6 +9,7 @@ import click
 import requests
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 from tqdm import tqdm
 
 # For HTTPS servers without valid certificates, like your dev / experimental
@@ -36,6 +37,7 @@ class TimingExperiment:
         self.cachebust = cachebust
         self.verifySSL = verifySSL
         self.headers = headers
+        self.headers['Accept-Encoding'] = 'identity'
 
     def time_request(self, url, cookies={}):
         """
@@ -89,22 +91,24 @@ class TimingExperiment:
         Intermix urls together when doing a batch time.
         """
         results = []
-        pbar = tqdm(itertools.product(range(self.tests), cookies))
-        for i, cookie in pbar:
-            status, resp_len, resp_time = self.time_request(
-                url, cookies={cookie[0]: cookie[1]}
-            )
-            result = {
-                'cookie': cookie[1],
-                'status': status,
-                'size': resp_len,
-                'time': resp_time,
-                'test': i,
-                'cachebust': self.cachebust,
-                'sample_time': time.time()
-            }
+        pbar = tqdm(range(self.tests))
+        for i in pbar:
+            for cookie in cookies:
+                status, resp_len, resp_time = self.time_request(
+                    url, cookies={cookie[0]: cookie[1]}
+                )
+                result = {
+                    'cookie': cookie[1],
+                    'status': status,
+                    'size': resp_len,
+                    'time': resp_time,
+                    'test': i,
+                    'cachebust': self.cachebust,
+                    'sample_time': time.monotonic()
+                }
 
-            results.append(result)
+                results.append(result)
+                time.sleep(self.sleep)
             time.sleep(self.sleep)
 
         return results
@@ -216,10 +220,10 @@ def cookie_test(url, cookie_name, cookies, length, tests, sleep, cachebust,
     appendchar = '0'
     ts = TimingExperiment(tests=tests, sleep=sleep, cachebust=cachebust)
 
-    cleaned_cookies = map(
+    cleaned_cookies = list(map(
         lambda x: (cookie_name, padding(x, length, appendchar)),
         cookies
-    )
+    ))
 
     data = ts.batch_time_cookies(
         url,
@@ -242,6 +246,37 @@ def cookie_test(url, cookie_name, cookies, length, tests, sleep, cachebust,
         )
 
 
+@click.command()
+@click.argument('url')
+@click.option('--sleep', type=float, default=1)
+@click.option('--points', type=int, default=100)
+@click.option('--cachebust', is_flag=True, default=False)
+def live_update(url, sleep, points, cachebust):
+    """
+    Display RTT in real time.
+    """
+
+    ts = TimingExperiment(cachebust=cachebust)
+
+    x_data, y_data = [], []
+
+    figure = plt.figure()
+    line, = plt.plot_date(x_data, y_data, '-')
+
+    def update(frame):
+        _, _, req_time = ts.time_request(url)
+        timestamp = time.monotonic()
+        x_data.append(timestamp)
+        y_data.append(req_time)
+        line.set_data(x_data[-points:], y_data[-points:])
+        figure.gca().relim()
+        figure.gca().autoscale_view()
+        return line,
+
+    animation = FuncAnimation(figure, update, interval=1000*sleep)
+    plt.show()
+
+
 @click.group()
 def main():
     pass
@@ -249,6 +284,7 @@ def main():
 
 main.add_command(url_test)
 main.add_command(cookie_test)
+main.add_command(live_update)
 
 
 if __name__ == "__main__":
