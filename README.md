@@ -47,7 +47,8 @@ As you can see, several of the URLS don't exist in `test-pages`, and take ~100us
 less time on my machine when they have to go though the PHP interpreter.
 
 Outside of the flags used in the example, there is:
-* `--graph` for producing a histogram of each experiment.
+* `--histogram` for producing a histogram of each experiment.
+* `--scatter` Scatter plot of time of request / time the request took.
 * `--cachebust` for adding a random query string.
 
 
