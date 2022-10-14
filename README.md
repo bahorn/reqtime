@@ -25,7 +25,7 @@ docker run -p 8080:8080 -v `pwd`/test-pages:/var/www/html trafex/php-nginx
 
 Then run the experiment with:
 ```
-python3 reqtime.py --sleep 0.01 --tests 100 \
+python3 reqtime.py url-test --sleep 0.01 --tests 100 \
     http://localhost:8080/testb.php \
     http://localhost:8080/exist.php \
     http://localhost:8080/test.html \
@@ -36,11 +36,11 @@ python3 reqtime.py --sleep 0.01 --tests 100 \
 Which should output something like:
 ```
                                url  status  size  cachebust      mean       std
-0  http://localhost:8080/ee404.php     404   146      False  0.001379  0.000184
-1  http://localhost:8080/ee404.txt     404   146      False  0.001318  0.000216
-2  http://localhost:8080/exist.php     200     0      False  0.001578  0.000171
-3  http://localhost:8080/test.html     200   146      False  0.001421  0.000165
-4  http://localhost:8080/testb.php     404   146      False  0.001663  0.000202
+0  http://localhost:8080/ee404.php     404   146      False  0.001213  0.000133
+1  http://localhost:8080/ee404.txt     404   146      False  0.001212  0.000140
+2  http://localhost:8080/exist.php     200     0      False  0.001435  0.000138
+3  http://localhost:8080/test.html     200   146      False  0.001247  0.000132
+4  http://localhost:8080/testb.php     404   146      False  0.001494  0.000206
 ```
 
 As you can see, several of the URLS don't exist in `test-pages`, and take ~100us
@@ -49,3 +49,6 @@ less time on my machine when they have to go though the PHP interpreter.
 Outside of the flags used in the example, there is:
 * `--graph` for producing a histogram of each experiment.
 * `--cachebust` for adding a random query string.
+
+
+It can also do experiments where it times how long specific cookies take.
