@@ -56,7 +56,8 @@ class TimingExperiment:
             params=params,
             cookies=cookies,
             headers=self.headers,
-            verify=self.verifySSL
+            verify=self.verifySSL,
+            allow_redirects=False
         )
         resp_time = resp.elapsed.total_seconds()
         return (resp.status_code, len(resp.content), resp_time)
