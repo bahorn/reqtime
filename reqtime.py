@@ -4,6 +4,7 @@ Script to time requests.
 import itertools
 import time
 import string
+import sched
 import random
 import click
 import requests
@@ -278,6 +279,136 @@ def live_update(url, sleep, points, cachebust):
     plt.show()
 
 
+def cause_spike(url, count, cachebust):
+    """
+    Send a burst of packets to *hopefully* trigger a spike in RTT.
+    """
+    ts = TimingExperiment(cachebust=cachebust)
+    for i in range(count):
+        ts.time_request(url)
+
+
+@click.command()
+@click.argument('url')
+@click.argument('message')
+@click.option('--sample-rate', type=int, default=10)
+@click.option('--count', type=int, default=10)
+@click.option('--cachebust', is_flag=True, default=False)
+def send_message(url, message, sample_rate, count, cachebust):
+    """
+    Try an send a message via causing a spike in latency.
+    """
+    # Add a Clock Sync Pattern
+    clock_sync_pattern = "10001010"
+    clock_end_pattern = "11111111"
+
+    # Create the Message
+    bin_message = ""
+    bin_message += clock_sync_pattern
+    for char in message:
+        binvalue = bin(ord(char))[2:]
+        binvalue = ('0' * (8 - len(binvalue))) + binvalue
+        bin_message += binvalue
+
+    bin_message += clock_end_pattern
+
+    print(bin_message)
+
+    s = sched.scheduler()
+
+    for idx, bit in enumerate(bin_message):
+        if bit == '1':
+            s.enter(
+                (idx/sample_rate),
+                0,
+                cause_spike,
+                argument=(url, count, cachebust)
+            )
+
+    s.run()
+
+
+class MessageStateMachine:
+    """
+    Handle the state, so we can decode messages out of a stream of 0/1s.
+    """
+    SYNC_START_PATTERN = [True, False, False, False, True, False, True, False]
+    SYNC_END_PATTERN = [True for i in range(8)]
+
+    def __init__(self, max_len=32):
+        self.found = False
+        self.data = []
+        self.dist_from_found = 0
+        self.max_len = max_len
+        self.message = ""
+
+    def add(self, value):
+        self.data.append(value)
+        self.data = self.data[-8:]
+
+        if self.data[-8:] == self.SYNC_START_PATTERN and not self.found:
+            print('[!] found sync pattern')
+            self.found = True
+            self.dist_from_found = 0
+            self.message = ""
+
+        if not self.found:
+            return
+
+        # We now need to try and decode the message
+        if self.dist_from_found > 0 and self.dist_from_found % 8 == 0:
+            if self.data[-8:] == self.SYNC_END_PATTERN:
+                print('[!] found end pattern')
+                print(f'[!] message: {self.message}')
+                self.found = False
+                return
+
+            bin_enc = "".join(
+                list(map(lambda x: "1" if x else "0", self.data[-8:]))
+            )
+            print('[?] recv>', chr(int(bin_enc, 2)))
+            self.message += chr(int(bin_enc, 2))
+
+        self.dist_from_found += 1
+
+        if self.dist_from_found > 8 * self.max_len:
+            print('[!] too long, potentially a bad decode')
+            self.found = False
+
+
+@click.command()
+@click.argument('url')
+@click.option('--samples', type=int, default=3)
+@click.option('--sample-rate', type=int, default=10)
+@click.option('--cachebust', is_flag=True, default=False)
+@click.option('--threshold', type=float, default=0.02)
+def recv_message(url, samples, sample_rate, cachebust, threshold):
+    """
+    Try an send a message via causing a spike in latency.
+    """
+    ts = TimingExperiment(cachebust=cachebust)
+    s = sched.scheduler()
+    sm = MessageStateMachine()
+
+    def collect_sample(sample_count):
+        running = []
+        for i in range(sample_count):
+            _, _, req_time = ts.time_request(url)
+            running.append(req_time > threshold)
+            time.sleep(0.01)
+
+        sm.add(sum(running) > 0)
+
+    def mainloop(scheduler):
+        scheduler.enter(1, 1, mainloop, (scheduler,))
+        # Add events for sample collection
+        for i in range(sample_rate):
+            scheduler.enter((i/sample_rate), 1, collect_sample, (samples,))
+
+    s.enter(0, 1, mainloop, (s,))
+    s.run()
+
+
 @click.group()
 def main():
     pass
@@ -286,6 +417,8 @@ def main():
 main.add_command(url_test)
 main.add_command(cookie_test)
 main.add_command(live_update)
+main.add_command(send_message)
+main.add_command(recv_message)
 
 
 if __name__ == "__main__":
