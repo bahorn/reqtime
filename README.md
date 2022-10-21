@@ -17,7 +17,9 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-After that, you can setup a test environment for observing a timing difference
+### Timing Requests
+
+You can setup a test environment for observing a timing difference
 between PHP scripts masquarading as 404 pages and real 404 pages like so:
 ```
 docker run -p 8080:8080 -v `pwd`/test-pages:/var/www/html trafex/php-nginx
@@ -53,3 +55,34 @@ Outside of the flags used in the example, there is:
 
 
 It can also do experiments where it times how long specific cookies take.
+
+### Live View
+
+
+Running the following to get a live graph showing latency spikes:
+```
+python3 reqtime.py live-update http://localhost:8080 --sleep 0.01
+```
+
+Where `--sleep` is the time between each requests. (not currently uniform in
+time!)
+
+### Sending / Receiving Messages
+
+As a quirky use of this, on some devices if you hit a certain endpoint there is
+a noticiable latency increase.
+In some cases, even starting a TLS session causes this.
+
+Send a message with:
+```
+python3 reqtime.py send-message https://HOST/404page "hack the planet" --sample-rate 5 --count 1
+```
+
+Recieve a message with:
+```
+python3 reqtime.py recv-message http://HOST/404page --sample-rate 5 --samples 5
+```
+
+This will send a message at 5 bits/second.
+
+Here is a [video of it live.](https://www.youtube.com/watch?v=uwF31jDxz44)
